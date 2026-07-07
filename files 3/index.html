@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>NovaCoin Exchange</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #7c5cff;
+    --accent2: #22c55e;
+    --danger: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: radial-gradient(circle at top, #161b22, #0d1117);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px;
+  }
+  .wrap { max-width: 560px; margin: 0 auto; }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  h1 {
+    font-size: 22px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: bold; font-size: 15px;
+  }
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    transition: opacity 0.15s ease, transform 0.1s ease;
+  }
+  button:hover { opacity: 0.9; }
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #connectBtn { background: var(--accent); color: white; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .stat-row { display: flex; justify-content: space-between; margin-bottom: 10px; }
+  .stat-row:last-child { margin-bottom: 0; }
+  .label { color: var(--muted); font-size: 13px; }
+  .value { font-weight: 600; font-size: 15px; }
+  .price { font-size: 28px; font-weight: 700; color: var(--accent2); }
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tab {
+    flex: 1;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 10px;
+  }
+  .tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .tab.active.sell { background: var(--danger); border-color: var(--danger); }
+  input {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: #0d1117;
+    color: var(--text);
+    font-size: 15px;
+    margin-bottom: 12px;
+  }
+  .actionBtn { width: 100%; padding: 14px; font-size: 15px; }
+  .buyBtn { background: var(--accent2); color: #06210f; }
+  .sellBtn { background: var(--danger); color: white; }
+  #status { font-size: 13px; color: var(--muted); margin-top: 10px; min-height: 18px; }
+  .feed-item {
+    display: flex; justify-content: space-between;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .feed-item:last-child { border-bottom: none; }
+  .buy-tag { color: var(--accent2); }
+  .sell-tag { color: var(--danger); }
+  .config {
+    font-size: 12px; color: var(--muted); margin-top: 20px;
+    padding: 12px; border: 1px dashed var(--border); border-radius: 10px;
+  }
+  .config code { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span class="logo">N</span> NovaCoin</h1>
+    <button id="connectBtn">Connect Wallet</button>
+  </header>
+
+  <div class="card">
+    <div class="label">Current Price</div>
+    <div class="price" id="priceDisplay">-- ETH</div>
+  </div>
+
+  <div class="card">
+    <div class="stat-row">
+      <span class="label">Your ETH Balance</span>
+      <span class="value" id="ethBalance">--</span>
+    </div>
+    <div class="stat-row">
+      <span class="label">Your NOVA Balance</span>
+      <span class="value" id="novaBalance">--</span>
+    </div>
+    <div class="stat-row">
+      <span class="label">Total Sold via Curve</span>
+      <span class="value" id="tokensSold">--</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="tabs">
+      <button class="tab active" id="buyTab" data-mode="buy">Buy</button>
+      <button class="tab" id="sellTab" data-mode="sell">Sell</button>
+    </div>
+
+    <input id="amountInput" type="number" min="0" step="any" placeholder="Amount (ETH to spend)" />
+    <button class="actionBtn buyBtn" id="actionBtn">Buy NOVA</button>
+    <div id="status"></div>
+  </div>
+
+  <div class="card">
+    <div class="label" style="margin-bottom:10px;">Recent Trades</div>
+    <div id="feed"><span class="label">No trades yet.</span></div>
+  </div>
+
+  <div class="config">
+    Contract addresses are set in <code>CONFIG</code> at the top of this file's script.
+    Deploy the contracts first, then paste the addresses in before opening this page.
+  </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------
+// CONFIG — fill these in after you deploy NovaCoin.sol and
+// NovaExchange.sol (see README.md for deployment instructions).
+// ---------------------------------------------------------------------
+const CONFIG = {
+  TOKEN_ADDRESS: "0x4E22D64e1dBF76e2BFb6e5c851d31b26af5440c4",
+  EXCHANGE_ADDRESS: "0xCc9ff1F10Bbc3B518EFC4cbD38Ec32acb951be68",
+  CHAIN_ID: 11155111 // Sepolia testnet
+};
+
+const ERC20_ABI = [
+  "function balanceOf(address) view returns (uint256)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function decimals() view returns (uint8)"
+];
+
+const EXCHANGE_ABI = [
+  "function currentPrice() view returns (uint256)",
+  "function tokensSold() view returns (uint256)",
+  "function buy() payable",
+  "function sell(uint256 tokenAmountWhole)",
+  "event Bought(address indexed buyer, uint256 ethIn, uint256 tokensOut, uint256 newPriceWei)",
+  "event Sold(address indexed seller, uint256 tokensIn, uint256 ethOut, uint256 newPriceWei)"
+];
+
+let provider, signer, userAddress;
+let tokenContract, exchangeContract;
+let mode = "buy";
+
+const $ = (id) => document.getElementById(id);
+
+$("connectBtn").onclick = connectWallet;
+$("buyTab").onclick = () => setMode("buy");
+$("sellTab").onclick = () => setMode("sell");
+$("actionBtn").onclick = handleAction;
+
+function setMode(m) {
+  mode = m;
+  $("buyTab").classList.toggle("active", m === "buy");
+  $("sellTab").classList.toggle("active", m === "sell");
+  $("sellTab").classList.toggle("sell", m === "sell");
+  $("actionBtn").className = "actionBtn " + (m === "buy" ? "buyBtn" : "sellBtn");
+  $("actionBtn").textContent = m === "buy" ? "Buy NOVA" : "Sell NOVA";
+  $("amountInput").placeholder = m === "buy" ? "Amount (ETH to spend)" : "Amount (NOVA to sell)";
+}
+
+async function connectWallet() {
+  if (!window.ethereum) {
+    setStatus("No wallet found. Install MetaMask to continue.", true);
+    return;
+  }
+  try {
+    provider = new ethers.BrowserProvider(window.ethereum);
+    await provider.send("eth_requestAccounts", []);
+    signer = await provider.getSigner();
+    userAddress = await signer.getAddress();
+
+    const network = await provider.getNetwork();
+    if (Number(network.chainId) !== CONFIG.CHAIN_ID) {
+      setStatus(`Wrong network. Please switch your wallet to chain ID ${CONFIG.CHAIN_ID}.`, true);
+    }
+
+    tokenContract = new ethers.Contract(CONFIG.TOKEN_ADDRESS, ERC20_ABI, signer);
+    exchangeContract = new ethers.Contract(CONFIG.EXCHANGE_ADDRESS, EXCHANGE_ABI, signer);
+
+    $("connectBtn").textContent = userAddress.slice(0, 6) + "..." + userAddress.slice(-4);
+    $("connectBtn").disabled = true;
+
+    await refreshData();
+    listenForTrades();
+    setStatus("Wallet connected.");
+  } catch (err) {
+    console.error(err);
+    setStatus("Connection failed: " + (err.message || err), true);
+  }
+}
+
+async function refreshData() {
+  try {
+    const price = await exchangeContract.currentPrice();
+    $("priceDisplay").textContent = ethers.formatEther(price) + " ETH";
+
+    const sold = await exchangeContract.tokensSold();
+    $("tokensSold").textContent = sold.toString() + " NOVA";
+
+    if (userAddress) {
+      const ethBal = await provider.getBalance(userAddress);
+      $("ethBalance").textContent = parseFloat(ethers.formatEther(ethBal)).toFixed(4) + " ETH";
+
+      const novaBal = await tokenContract.balanceOf(userAddress);
+      $("novaBalance").textContent = ethers.formatEther(novaBal) + " NOVA";
+    }
+  } catch (err) {
+    console.error("refreshData error:", err);
+  }
+}
+
+async function handleAction() {
+  const amount = $("amountInput").value;
+  if (!amount || Number(amount) <= 0) {
+    setStatus("Enter a valid amount.", true);
+    return;
+  }
+  if (!signer) {
+    setStatus("Connect your wallet first.", true);
+    return;
+  }
+
+  $("actionBtn").disabled = true;
+  try {
+    if (mode === "buy") {
+      setStatus("Sending buy transaction...");
+      const tx = await exchangeContract.buy({ value: ethers.parseEther(amount) });
+      await tx.wait();
+      setStatus("Purchase confirmed!");
+    } else {
+      const wholeTokens = BigInt(Math.floor(Number(amount)));
+      const amountWei = ethers.parseEther(wholeTokens.toString());
+
+      const allowance = await tokenContract.allowance(userAddress, CONFIG.EXCHANGE_ADDRESS);
+      if (allowance < amountWei) {
+        setStatus("Approving NOVA spend...");
+        const approveTx = await tokenContract.approve(CONFIG.EXCHANGE_ADDRESS, amountWei);
+        await approveTx.wait();
+      }
+
+      setStatus("Selling NOVA...");
+      const tx = await exchangeContract.sell(wholeTokens);
+      await tx.wait();
+      setStatus("Sale confirmed!");
+    }
+    $("amountInput").value = "";
+    await refreshData();
+  } catch (err) {
+    console.error(err);
+    setStatus("Transaction failed: " + (err.reason || err.message || err), true);
+  } finally {
+    $("actionBtn").disabled = false;
+  }
+}
+
+function listenForTrades() {
+  const feed = $("feed");
+
+  exchangeContract.on("Bought", (buyer, ethIn, tokensOut) => {
+    addFeedItem(`${short(buyer)} bought ${tokensOut} NOVA`, `-${ethers.formatEther(ethIn)} ETH`, "buy-tag");
+    refreshData();
+  });
+
+  exchangeContract.on("Sold", (seller, tokensIn, ethOut) => {
+    addFeedItem(`${short(seller)} sold ${tokensIn} NOVA`, `+${ethers.formatEther(ethOut)} ETH`, "sell-tag");
+    refreshData();
+  });
+}
+
+function addFeedItem(left, right, cls) {
+  const feed = $("feed");
+  if (feed.querySelector(".label")) feed.innerHTML = "";
+  const item = document.createElement("div");
+  item.className = "feed-item";
+  item.innerHTML = `<span class="${cls}">${left}</span><span>${right}</span>`;
+  feed.prepend(item);
+}
+
+function short(addr) {
+  return addr.slice(0, 6) + "..." + addr.slice(-4);
+}
+
+function setStatus(msg, isError = false) {
+  $("status").textContent = msg;
+  $("status").style.color = isError ? "var(--danger)" : "var(--muted)";
+}
+</script>
+</body>
+</html>
