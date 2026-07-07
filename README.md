@@ -54,7 +54,7 @@ const CONFIG = {
 
 ## 3. Run it
 
-Just open `frontend/index.html` in a browser that has the MetaMask
+Just open `https://ayushxhyphen.github.io/NovaCoin-Exchange/` in a browser that has the MetaMask
 extension installed (double-clicking the file works, or serve it with any
 static file server). Click **Connect Wallet**, make sure MetaMask is on
 Sepolia, and you can buy and sell NOVA immediately — the price updates
